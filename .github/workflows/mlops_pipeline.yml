@@ -1,0 +1,40 @@
+name: Customer Churn MLOps Pipeline
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+
+jobs:
+  run-mlops-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Initialize database
+        run: python src/database.py
+
+      - name: Ingest live data
+        run: python src/live_ingestion.py
+
+      - name: Run preprocessing
+        run: python src/preprocess.py
+
+      - name: Train model
+        run: python src/train.py
+
+      - name: Run drift detection
+        run: python src/drift_detection.py
+
+      - name: Conditional retraining
+        run: python src/auto_retrain.py
