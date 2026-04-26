@@ -18,23 +18,20 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+- name: Initialize database
+  run: python -m src.database
 
-      - name: Initialize database
-        run: python src/database.py
+- name: Ingest live data
+  run: python -m src.live_ingestion
 
-      - name: Ingest live data
-        run: python src/live_ingestion.py
+- name: Run preprocessing
+  run: python -m src.preprocess
 
-      - name: Run preprocessing
-        run: python src/preprocess.py
+- name: Train model
+  run: python -m src.train
 
-      - name: Train model
-        run: python src/train.py
+- name: Run drift detection
+  run: python -m src.drift_detection
 
-      - name: Run drift detection
-        run: python src/drift_detection.py
-
-      - name: Conditional retraining
-        run: python src/auto_retrain.py
+- name: Conditional retraining
+  run: python -m src.auto_retrain
