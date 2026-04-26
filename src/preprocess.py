@@ -1,6 +1,11 @@
 import pandas as pd
 from src.database import get_connection
 
+try:
+    from src.database import get_connection
+except ModuleNotFoundError:
+    from database import get_connection
+    
 def preprocess_data():
     conn = get_connection()
 

@@ -1,5 +1,6 @@
 import sqlite3
 import subprocess
+import sys
 
 DB_PATH = "data/churn_mlops.db"
 
@@ -23,11 +24,10 @@ def auto_retrain():
     if drift_found:
         print("Drift detected. Starting retraining...")
 
-        subprocess.run(["python", "src/preprocess.py"])
-        subprocess.run(["python", "src/train.py"])
+        subprocess.run([sys.executable, "-m", "src.preprocess"], check=True)
+        subprocess.run([sys.executable, "-m", "src.train"], check=True)
 
         print("Retraining completed.")
-
     else:
         print("No drift detected. Retraining skipped.")
 

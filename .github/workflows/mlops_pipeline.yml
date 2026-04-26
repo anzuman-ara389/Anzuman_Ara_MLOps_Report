@@ -9,6 +9,9 @@ jobs:
   run-mlops-pipeline:
     runs-on: ubuntu-latest
 
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -18,20 +21,23 @@ jobs:
         with:
           python-version: "3.12"
 
-- name: Initialize database
-  run: python -m src.database
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
-- name: Ingest live data
-  run: python -m src.live_ingestion
+      - name: Initialize database
+        run: python -m src.database
 
-- name: Run preprocessing
-  run: python -m src.preprocess
+      - name: Ingest live data
+        run: python -m src.live_ingestion
 
-- name: Train model
-  run: python -m src.train
+      - name: Run preprocessing
+        run: python -m src.preprocess
 
-- name: Run drift detection
-  run: python -m src.drift_detection
+      - name: Train model
+        run: python -m src.train
 
-- name: Conditional retraining
-  run: python -m src.auto_retrain
+      - name: Run drift detection
+        run: python -m src.drift_detection
+
+      - name: Conditional retraining
+        run: python -m src.auto_retrain

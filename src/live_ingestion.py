@@ -2,6 +2,10 @@ import random
 import pandas as pd
 from src.database import get_connection, initialize_database
 
+try:
+    from src.database import get_connection, initialize_database
+except ModuleNotFoundError:
+    from database import get_connection, initialize_database
 
 def generate_customer():
     tenure = random.randint(1, 72)
