@@ -1,11 +1,11 @@
 import pandas as pd
-from src.database import get_connection
 
 try:
     from src.database import get_connection
 except ModuleNotFoundError:
     from database import get_connection
-    
+
+
 def preprocess_data():
     conn = get_connection()
 
@@ -30,6 +30,7 @@ def preprocess_data():
     print("Preprocessing complete.")
     print("Rows:", df.shape[0])
     print("Columns:", df.shape[1])
+
 
 if __name__ == "__main__":
     preprocess_data()

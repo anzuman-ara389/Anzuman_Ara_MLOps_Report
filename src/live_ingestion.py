@@ -1,11 +1,12 @@
 import random
+import os
 import pandas as pd
-from src.database import get_connection, initialize_database
 
 try:
     from src.database import get_connection, initialize_database
 except ModuleNotFoundError:
     from database import get_connection, initialize_database
+
 
 def generate_customer():
     tenure = random.randint(1, 72)
@@ -21,7 +22,6 @@ def generate_customer():
         "Credit card (automatic)"
     ])
 
-    # Risk score for churn
     risk = 0
 
     if contract == "Month-to-month":
@@ -67,7 +67,6 @@ def ingest_live_data(rows=100):
     initialize_database()
 
     data = [generate_customer() for _ in range(rows)]
-
     df = pd.DataFrame(data)
 
     conn = get_connection()
@@ -75,6 +74,11 @@ def ingest_live_data(rows=100):
     conn.close()
 
     print(f"{rows} smart live customer records inserted successfully.")
+
+    os.makedirs("logs", exist_ok=True)
+
+    with open("logs/ingestion.log", "a", encoding="utf-8") as f:
+        f.write(f"{rows} records inserted successfully\n")
 
 
 if __name__ == "__main__":

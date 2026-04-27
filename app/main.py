@@ -2,9 +2,9 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import pandas as pd
 import joblib
-import json
 import sqlite3
 import subprocess
+import os
 
 from src.database import get_connection
 from src.live_ingestion import ingest_live_data
@@ -61,14 +61,14 @@ def ingest_live(rows: int = 20):
 
 @app.post("/drift-check")
 def drift_check():
-    subprocess.run(["python", "src/drift_detection.py"])
+    subprocess.run(["python", "-m", "src.drift_detection"])
     return {"message": "Drift detection completed"}
 
 
 @app.post("/retrain")
 def retrain():
-    subprocess.run(["python", "src/preprocess.py"])
-    subprocess.run(["python", "src/train.py"])
+    subprocess.run(["python", "-m", "src.preprocess"])
+    subprocess.run(["python", "-m", "src.train"])
     return {"message": "Model retrained successfully"}
 
 
@@ -103,13 +103,15 @@ def predict(data: CustomerInput):
 
     df = pd.DataFrame([data.model_dump()])
 
+    df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
+    df = df.fillna(0)
+
     df["avg_monthly_value"] = df["MonthlyCharges"] / (df["tenure"] + 1)
 
     df = pd.get_dummies(df, drop_first=True)
     df = df.reindex(columns=columns, fill_value=0)
 
     pred = int(model.predict(df)[0])
-
     result = "Churn" if pred == 1 else "No Churn"
 
     if hasattr(model, "predict_proba"):
@@ -128,6 +130,11 @@ def predict(data: CustomerInput):
 
     conn.commit()
     conn.close()
+
+    os.makedirs("logs", exist_ok=True)
+
+    with open("logs/prediction.log", "a", encoding="utf-8") as f:
+        f.write(f"Prediction={result}, Probability={proba}\n")
 
     return {
         "prediction": result,
