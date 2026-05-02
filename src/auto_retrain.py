@@ -19,15 +19,19 @@ def auto_retrain():
     rows = cursor.fetchall()
     conn.close()
 
+    if not rows:
+        print("No drift report found. Please run drift detection first.")
+        return
+
     drift_found = any(row[0] == "Drift Detected" for row in rows)
 
     if drift_found:
-        print("Drift detected. Starting retraining...")
+        print("Drift detected. Starting automatic retraining...")
 
         subprocess.run([sys.executable, "-m", "src.preprocess"], check=True)
         subprocess.run([sys.executable, "-m", "src.train"], check=True)
 
-        print("Retraining completed.")
+        print("Automatic retraining completed successfully.")
     else:
         print("No drift detected. Retraining skipped.")
 

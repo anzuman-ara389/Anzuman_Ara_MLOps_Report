@@ -4,21 +4,14 @@ import pandas as pd
 import joblib
 import sqlite3
 import subprocess
-import os
 
-from src.database import get_connection
+from src.database import get_connection, initialize_database
 from src.live_ingestion import ingest_live_data
 
-app = FastAPI(title="Advanced Customer Churn MLOps API")
+app = FastAPI(title="AI-Powered Customer Retention System API")
 
 MODEL_PATH = "artifacts/model_latest.pkl"
 COLUMNS_PATH = "artifacts/columns_latest.pkl"
-
-
-def load_artifacts():
-    model = joblib.load(MODEL_PATH)
-    columns = joblib.load(COLUMNS_PATH)
-    return model, columns
 
 
 class CustomerInput(BaseModel):
@@ -43,9 +36,15 @@ class CustomerInput(BaseModel):
     TotalCharges: float
 
 
+def load_model():
+    model = joblib.load(MODEL_PATH)
+    columns = joblib.load(COLUMNS_PATH)
+    return model, columns
+
+
 @app.get("/")
 def home():
-    return {"message": "MLOps API Running"}
+    return {"message": "Customer Retention System API Running"}
 
 
 @app.get("/health")
@@ -56,7 +55,150 @@ def health():
 @app.post("/ingest-live")
 def ingest_live(rows: int = 20):
     ingest_live_data(rows)
-    return {"message": f"{rows} live records inserted"}
+    return {"message": f"{rows} generated records inserted"}
+
+
+@app.post("/customer-event")
+def add_customer_event(data: CustomerInput):
+    initialize_database()
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO raw_customers (
+            gender, SeniorCitizen, Partner, Dependents, tenure,
+            PhoneService, MultipleLines, InternetService,
+            OnlineSecurity, OnlineBackup, DeviceProtection, TechSupport,
+            StreamingTV, StreamingMovies, Contract,
+            PaperlessBilling, PaymentMethod,
+            MonthlyCharges, TotalCharges, Churn, source
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        data.gender,
+        data.SeniorCitizen,
+        data.Partner,
+        data.Dependents,
+        data.tenure,
+        data.PhoneService,
+        data.MultipleLines,
+        data.InternetService,
+        data.OnlineSecurity,
+        data.OnlineBackup,
+        data.DeviceProtection,
+        data.TechSupport,
+        data.StreamingTV,
+        data.StreamingMovies,
+        data.Contract,
+        data.PaperlessBilling,
+        data.PaymentMethod,
+        data.MonthlyCharges,
+        data.TotalCharges,
+        "Unknown",
+        "api_post"
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return {
+        "message": "Customer data received via API and stored in database",
+        "flow": "API → DB"
+    }
+
+
+@app.get("/latest-customers")
+def latest_customers():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, gender, tenure, Contract, MonthlyCharges, source, created_at
+        FROM raw_customers
+        ORDER BY id DESC
+        LIMIT 10
+    """)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return {"latest_customers": rows}
+
+
+@app.post("/predict")
+def predict(data: CustomerInput):
+    model, columns = load_model()
+
+    df = pd.DataFrame([data.model_dump()])
+
+    df["MonthlyCharges"] = pd.to_numeric(df["MonthlyCharges"], errors="coerce")
+    df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
+    df = df.fillna(0)
+
+    df["avg_monthly_value"] = df["MonthlyCharges"] / (df["tenure"] + 1)
+
+    df = pd.get_dummies(df, drop_first=True)
+    df = df.reindex(columns=columns, fill_value=0)
+
+    pred = int(model.predict(df)[0])
+    prediction = "Churn" if pred == 1 else "No Churn"
+
+    if hasattr(model, "predict_proba"):
+        probability = float(max(model.predict_proba(df)[0]))
+    else:
+        probability = 0.0
+
+    # Business rule:
+    # If model predicts Churn, at least Medium retention action is required.
+    if prediction == "Churn":
+        if probability >= 0.75:
+            risk_level = "High"
+        else:
+            risk_level = "Medium"
+    else:
+        risk_level = "Low"
+
+    if risk_level == "High":
+        revenue_at_risk = round(data.MonthlyCharges * 6, 2)
+    elif risk_level == "Medium":
+        revenue_at_risk = round(data.MonthlyCharges * 3, 2)
+    else:
+        revenue_at_risk = 0
+
+    if risk_level == "High":
+        recommended_action = "Priority retention call with discount offer"
+    elif risk_level == "Medium":
+        recommended_action = "Send targeted promotional offer and follow-up"
+    else:
+        recommended_action = "No immediate retention action required"
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO prediction_logs
+        (input_data, prediction, probability, risk_level, revenue_at_risk, recommended_action)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        str(data.model_dump()),
+        prediction,
+        probability,
+        risk_level,
+        revenue_at_risk,
+        recommended_action
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return {
+        "prediction": prediction,
+        "probability": probability,
+        "risk_level": risk_level,
+        "revenue_at_risk": revenue_at_risk,
+        "recommended_action": recommended_action
+    }
 
 
 @app.post("/drift-check")
@@ -78,7 +220,7 @@ def model_info():
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT model_version, accuracy, created_at
+        SELECT model_version, accuracy, precision, recall, f1_score, created_at
         FROM model_registry
         ORDER BY id DESC
         LIMIT 1
@@ -87,56 +229,4 @@ def model_info():
     row = cursor.fetchone()
     conn.close()
 
-    if row:
-        return {
-            "model_version": row[0],
-            "accuracy": row[1],
-            "created_at": row[2]
-        }
-
-    return {"message": "No model found"}
-
-
-@app.post("/predict")
-def predict(data: CustomerInput):
-    model, columns = load_artifacts()
-
-    df = pd.DataFrame([data.model_dump()])
-
-    df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
-    df = df.fillna(0)
-
-    df["avg_monthly_value"] = df["MonthlyCharges"] / (df["tenure"] + 1)
-
-    df = pd.get_dummies(df, drop_first=True)
-    df = df.reindex(columns=columns, fill_value=0)
-
-    pred = int(model.predict(df)[0])
-    result = "Churn" if pred == 1 else "No Churn"
-
-    if hasattr(model, "predict_proba"):
-        proba = float(max(model.predict_proba(df)[0]))
-    else:
-        proba = None
-
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        INSERT INTO prediction_logs
-        (input_data, prediction, probability)
-        VALUES (?, ?, ?)
-    """, (str(data.model_dump()), result, proba))
-
-    conn.commit()
-    conn.close()
-
-    os.makedirs("logs", exist_ok=True)
-
-    with open("logs/prediction.log", "a", encoding="utf-8") as f:
-        f.write(f"Prediction={result}, Probability={proba}\n")
-
-    return {
-        "prediction": result,
-        "probability": proba
-    }
+    return {"model_info": row}

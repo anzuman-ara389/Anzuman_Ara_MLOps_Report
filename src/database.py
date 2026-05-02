@@ -3,15 +3,18 @@ from pathlib import Path
 
 DB_PATH = "data/churn_mlops.db"
 
+
 def get_connection():
     Path("data").mkdir(exist_ok=True)
     return sqlite3.connect(DB_PATH)
+
 
 def initialize_database():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Raw live customer data
+
+    # 1. RAW CUSTOMER DATA
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS raw_customers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,22 +38,28 @@ def initialize_database():
         MonthlyCharges REAL,
         TotalCharges REAL,
         Churn TEXT,
+        source TEXT DEFAULT 'generated',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
 
-    # Prediction logs
+   
+    # 2. PREDICTION LOGS (BUSINESS OUTPUT)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS prediction_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         input_data TEXT,
         prediction TEXT,
         probability REAL,
+        risk_level TEXT,
+        revenue_at_risk REAL,
+        recommended_action TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
 
-    # Drift reports
+
+    # 3. DRIFT REPORTS
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS drift_reports (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,12 +72,16 @@ def initialize_database():
     )
     """)
 
-    # Model registry
+    # 4. MODEL REGISTRY
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS model_registry (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         model_version TEXT,
         accuracy REAL,
+        precision REAL,
+        recall REAL,
+        f1_score REAL,
+        model_path TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
@@ -76,6 +89,7 @@ def initialize_database():
     conn.commit()
     conn.close()
 
+
 if __name__ == "__main__":
     initialize_database()
-    print("Database created successfully.")
+    print("Database initialized successfully.")

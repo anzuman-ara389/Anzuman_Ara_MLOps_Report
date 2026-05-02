@@ -1,163 +1,223 @@
 # M6 – Data Engineering and Machine Learning Operations in Business
-# Customer Churn MLOps Pipeline
+# AI-Powered Customer Retention System for Telecom Subscription Services
 Submitted by: Anzuman Ara
 Student ID: 20241266
 
 
 # Project Overview:
-This project implements an advanced end-to-end MLOps pipeline for customer churn prediction. The main goal is to design a production-oriented system that can handle live data ingestion, preprocessing, model training, deployment, monitoring, drift detection, and retraining in a structured and reproducible way.
+This project implements a production-oriented end-to-end MLOps pipeline for a customer retention system in telecom services.
 
-The system predicts whether a customer is likely to churn based on input features such as customer profile, service usage, billing behavior, and contract type.
+The main goal of the system is not only to predict customer churn but to support business decision-making by identifying high-risk customers and recommending retention actions.
 
-A lightweight Streamlit frontend is included for interactive predictions and operational monitoring. FastAPI is used to expose real-time REST API endpoints. SQLite is used as a lightweight relational database to store live customer data, logs, drift reports, and model registry information.
+The system is designed to simulate a real-world production environment where customer data continuously arrives, gets processed, used for prediction, monitored for drift, and retrained when necessary.
+
+FastAPI is used to deploy the model as a real-time API, Streamlit is used for interactive frontend visualization, and SQLite is used as a lightweight database to store data, predictions, drift reports, and model versions.
+
 
 # Pipeline Structure:
 The pipeline consists of the following components:
 
 1. Live Data Ingestion
-New customer records are continuously simulated and inserted into the SQLite database. This represents how production systems receive incoming customer events from CRM, subscription, or billing systems.
+New customer records are generated using rule-based logic to simulate realistic churn behavior.
+Unlike random data, churn is influenced by factors such as contract type, tenure, and monthly charges.
+
 Data ingestion can be triggered in three ways:
-Manual execution using Python script
-API endpoint /ingest-live
-Scheduled GitHub Actions workflow
+- Manual execution using Python script
+- API endpoint (/customer-event and /ingest-live)
+- Scheduled GitHub Actions workflow
+
 All incoming records are stored in the raw_customers table.
 
+
 2. Database Layer
-SQLite is used as the main storage layer.
+SQLite is used as the main storage system to ensure structured data management and reproducibility.
+
 Tables used:
-raw_customers
-prediction_logs
-drift_reports
-model_registry
-This provides structured storage, reproducibility, and traceability.
+- raw_customers (incoming customer data)
+- prediction_logs (predictions and business outputs)
+- drift_reports (data drift monitoring)
+- model_registry (model versions and metrics)
+
+This enables tracking, monitoring, and version control of the pipeline.
+
 
 3. Preprocessing
-The pipeline reads raw customer data from the database and applies preprocessing steps:
-handling missing values
-numeric conversion
-categorical encoding
-target transformation
-schema consistency checks
-Processed data is stored as:
+The pipeline reads raw data from the database and performs:
+
+- handling missing values (median for numeric, default for categorical)
+- numeric conversion for consistency
+- categorical encoding using one-hot encoding
+- target transformation for model training
+
+The processed dataset is saved as:
 data/processed_data.csv
 
+
 4. Feature Engineering
-An additional derived feature is created:
-avg_monthly_value = MonthlyCharges / (tenure + 1)
-This helps capture the relationship between customer spending and customer lifetime.
+To improve model performance, additional features are created:
+
+- avg_monthly_value = MonthlyCharges / tenure
+- high_monthly_charge = customers with high billing
+- short_tenure = customers with low subscription duration
+- estimated_customer_value = MonthlyCharges × tenure
+
+These features help capture customer behavior and improve churn prediction.
+
 
 5. Model Training
-A Random Forest Classifier is used because it performs well on structured tabular data and is robust with limited tuning.
-Training process:
-load processed data
-split train/test sets
-train model
-evaluate metrics
-save artifacts
-register model version
+A Random Forest Classifier is used because it performs well on structured tabular data and handles non-linear relationships effectively.
+
+Training steps:
+- load processed data
+- split into training and testing sets
+- train the model
+- evaluate performance using multiple metrics
+
+Evaluation metrics:
+- Accuracy
+- Precision
+- Recall
+- F1-score
+
+Model artifacts are saved for reproducibility.
+
 
 6. Model Versioning and Artifacts
-Each training run saves versioned artifacts:
-artifacts/model_YYYYMMDD_HHMMSS.pkl
-artifacts/model_latest.pkl
-artifacts/columns_latest.pkl
-artifacts/metrics_latest.json
-This supports rollback, reproducibility, and model comparison.
+Each training run generates versioned artifacts:
 
-7. Deployment
-FastAPI is used to deploy the trained model.
+- artifacts/model_YYYYMMDD_HHMMSS.pkl
+- artifacts/model_latest.pkl
+- artifacts/columns_latest.pkl
+- artifacts/metrics_latest.json
+
+This allows tracking model changes and supports rollback if needed.
+
+
+7. Deployment (API Layer)
+The trained model is deployed using FastAPI to simulate a production system.
+
 Available endpoints:
-/health
-/predict
-/ingest-live
-/drift-check
-/retrain
-/model-info
-The API receives customer input data and returns churn predictions in real time.
+- /health
+- /predict
+- /customer-event
+- /ingest-live
+- /drift-check
+- /retrain
+- /model-info
 
-8. Monitoring
-Prediction logs are stored in the database to track model behavior over time.
-The system also monitors incoming live data for drift.
+The API enables real-time interaction with the model.
 
-9. Drift Detection
-The pipeline compares historical customer data with the latest incoming batch using statistical mean shift.
+
+8. Prediction and Business Logic
+The system goes beyond simple prediction by converting outputs into business decisions.
+
+For each prediction, the system returns:
+- churn prediction (Yes/No)
+- probability score
+- risk level (High / Medium / Low)
+- estimated revenue at risk
+- recommended retention action
+
+Example:
+Churn → Medium Risk → Send promotional offer
+Churn → High Risk → Offer discount and call customer
+
+This makes the system useful for real business applications.
+
+
+9. Monitoring
+The system tracks prediction results and incoming data patterns.
+
+Prediction logs are stored in the database to analyze model behavior over time.
+
+
+10. Drift Detection
+Data drift is detected by comparing historical and recent data distributions.
+
 Monitored features:
-MonthlyCharges
-TotalCharges
-tenure
-If drift score exceeds threshold:
-0.20
-A drift alert is created.
+- MonthlyCharges
+- TotalCharges
+- tenure
 
-10. Conditional Retraining
+Drift is detected if:
+drift_score > 0.20
+
+This ensures the model remains reliable over time.
+
+
+11. Conditional Retraining
+The system automatically decides whether retraining is required.
+
 If drift is detected:
-Preprocess → Retrain → Save New Model
-If no drift is found:
-Retraining skipped
-This reduces unnecessary compute cost.
+Preprocess → Train → Save new model
 
-11. Frontend Dashboard
-A Streamlit dashboard is included with:
-API health check
-Live data ingestion button
-Drift check button
-Latest model information
-Customer prediction form
-Prediction result display
-This improves usability and demonstrates real deployment.
+If no drift is detected:
+Retraining is skipped
+
+This optimizes performance and reduces unnecessary computation.
+
+
+12. Automation (GitHub Actions)
+A GitHub Actions workflow is implemented to simulate scheduled execution.
+
+The pipeline runs automatically and performs:
+- data ingestion
+- preprocessing
+- model training
+- drift detection
+- conditional retraining
+- automatic commit and push of updated artifacts
+
+This demonstrates continuous integration and automation.
+
+
+13. Frontend Dashboard
+A Streamlit dashboard is developed to provide a user-friendly interface.
+
+Features include:
+- API health check
+- live data ingestion trigger
+- drift detection trigger
+- retraining trigger
+- customer input form
+- prediction display with risk and recommended action
+- model performance metrics
+
+This enables non-technical users to interact with the system.
+
 
 # Project Structure:
-customer-churn-mlops
+customer-retention-mlops
 ├── app/                    # FastAPI application
-│   └── main.py
-├── src/                    # Pipeline scripts
-│   ├── database.py
-│   ├── live_ingestion.py
-│   ├── preprocess.py
-│   ├── train.py
-│   ├── drift_detection.py
-│   ├── auto_retrain.py
-│   ├── check_database.py
-│   ├── check_registry.py
-│   └── check_drift.py
-├── data/                   # SQLite database and processed files
-│   ├── churn_mlops.db
-│   └── processed_data.csv
-├── artifacts/             # Saved models, metrics, schemas
-├── logs/                  # Optional logs
-├── .github/workflows/     # GitHub Actions automation
-├── frontend.py            # Streamlit dashboard
-├── Dockerfile             # Container setup
+├── src/                    # pipeline scripts
+├── data/                   # database and processed data
+├── artifacts/              # model and metrics
+├── logs/                   # logs
+├── frontend.py             # Streamlit dashboard
+├── Dockerfile              # container setup
 ├── requirements.txt
+├── .github/workflows       # automation pipeline
 └── README.md
+
+
 # How to Run (Without Docker)
-# Step 1: Install dependencies
 pip install -r requirements.txt
-# Step 2: Initialize database
 python src/database.py
-# Step 3: Generate live customer data
 python src/live_ingestion.py
-# Step 4: Run preprocessing
 python src/preprocess.py
-# # Step 5: Train model
 python src/train.py
-# Step 6: Run FastAPI server
 uvicorn app.main:app --reload
-# Step 7: Open Swagger API Docs
-http://127.0.0.1:8000/docs
-# Step 8: Run Streamlit dashboard
 streamlit run frontend.py
-# Step 9: Open frontend
-http://localhost:8501
-# How to Run with Docker
-# Step 1: Build Docker image
-docker build -t churn-mlops .
-# Step 2: Run container
-docker run -p 8000:8000 churn-mlops
-# Step 3: Open API Docs
-http://localhost:8000/docs
-API Usage
+
+
+# How to Run (With Docker)
+docker build -t retention-system .
+docker run -p 8000:8000 retention-system
+
+
+# API Usage
 Use the /predict endpoint.
+
 Example input:
 {
   "gender": "Female",
@@ -180,27 +240,17 @@ Example input:
   "MonthlyCharges": 79.85,
   "TotalCharges": 957.2
 }
-Latest Model Performance
-Latest training run:
-Accuracy: 0.8235
-Precision: 0.75
-Recall: 0.50
-F1 Score: 0.60
 
-# Scheduled Execution
-A GitHub Actions workflow is included to support scheduled daily pipeline execution and manual triggering.
 
-# The workflow performs:
-database initialization
-live data ingestion
-preprocessing
-model training
-drift detection
-conditional retraining
+# Latest Model Performance
+Accuracy: ~0.92
+Precision: ~0.88
+Recall: ~0.71
+F1 Score: ~0.78
+
 
 # Notes
-The system simulates live customer data using generated production-like records
-SQLite is used for structured storage and monitoring
-The focus is on pipeline design, deployment, automation, and reproducibility
-Logs, metrics, and model versions are stored for traceability
-The solution is Docker-ready and API-deployable
+- The system simulates production-like data ingestion
+- The focus is on pipeline design, automation, and deployment
+- Model performance is secondary to system functionality
+- The system is fully reproducible, automated, and deployment-ready

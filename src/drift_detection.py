@@ -6,31 +6,40 @@ DB_PATH = "data/churn_mlops.db"
 
 def detect_drift():
     conn = sqlite3.connect(DB_PATH)
-
     df = pd.read_sql("SELECT * FROM raw_customers", conn)
-
     conn.close()
 
-    if len(df) < 100:
-        print("Not enough data for drift detection.")
+    if df.empty:
+        print("No customer data available for drift detection.")
         return
 
-    # old historical = first 70%
+    if len(df) < 100:
+        print("Not enough data for drift detection. Minimum 100 rows required.")
+        return
+
+    numeric_features = ["MonthlyCharges", "TotalCharges", "tenure"]
+
+    for feature in numeric_features:
+        df[feature] = pd.to_numeric(df[feature], errors="coerce")
+
+    df = df.dropna(subset=numeric_features)
+
     split_index = int(len(df) * 0.7)
 
     old_df = df.iloc[:split_index]
     new_df = df.iloc[split_index:]
 
-    features = ["MonthlyCharges", "TotalCharges", "tenure"]
-
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    for feature in features:
+    print("Drift Detection Report")
+    print("----------------------")
+
+    for feature in numeric_features:
         old_mean = old_df[feature].mean()
         new_mean = new_df[feature].mean()
 
-        drift_score = abs(new_mean - old_mean) / max(old_mean, 1)
+        drift_score = abs(new_mean - old_mean) / max(abs(old_mean), 1)
 
         status = "Drift Detected" if drift_score > 0.20 else "Stable"
 
@@ -46,10 +55,17 @@ def detect_drift():
             status
         ))
 
-        print(f"{feature}: {status} | Score={round(drift_score,4)}")
+        print(
+            f"{feature}: old_mean={round(old_mean, 2)}, "
+            f"new_mean={round(new_mean, 2)}, "
+            f"drift_score={round(drift_score, 4)}, "
+            f"status={status}"
+        )
 
     conn.commit()
     conn.close()
+
+    print("Drift detection completed and saved to database.")
 
 
 if __name__ == "__main__":

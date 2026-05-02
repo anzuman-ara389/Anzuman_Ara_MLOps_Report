@@ -1,10 +1,10 @@
 fastapi
 uvicorn
+pydantic
 pandas
+numpy
 scikit-learn
 joblib
 streamlit
 requests
-sqlalchemy
-numpy
 python-multipart
